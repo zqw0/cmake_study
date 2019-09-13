@@ -1,0 +1,63 @@
+https://blog.csdn.net/afei__/article/details/81201039
+1. 指定 cmake 的最小版本
+cmake_minimum_required(VERSION 3.4.1)
+这行命令是可选的，我们可以不写这句话，但在有些情况下，如果 CMakeLists.txt 文件中使用了一些高版本 cmake 特有的一些命令的时候，就需要加上这样一行，提醒用户升级到该版本之后再执行 cmake。
+
+2. 设置项目名称
+project(demo)
+这个命令不是强制性的，但最好都加上。它会引入两个变量 demo_BINARY_DIR 和 demo_SOURCE_DIR，同时，cmake 自动定义了两个等价的变量 PROJECT_BINARY_DIR 和 PROJECT_SOURCE_DIR
+其中PROJECT_BINARY_DIR和PROJECT_SOURCE_DIR并非完全等价。如果是cd build; cmake ..的话。PROJECT_BINARY_DIR = src/build这个目录的绝对路径。
+而PROJECT_SOURCE_DIR = src/这个目录的绝对路径。这样的构建方式也叫外部构建方式。
+
+3. 设置编译类型
+add_executable(demo demo.cpp) # 生成可执行文件
+add_library(common STATIC util.cpp) # 生成静态库
+add_library(common SHARED util.cpp) # 生成动态库或共享库
+add_library 默认生成是静态库，通过以上命令生成文件名字，
+
+在 Linux 下是：
+demo
+libcommon.a
+libcommon.so
+在 Windows 下是：
+demo.exe
+common.lib
+common.dll
+4. 指定编译包含的源文件
+4.1 明确指定包含哪些源文件
+
+add_library(demo demo.cpp test.cpp util.cpp)
+
+4.2 搜索所有的 cpp 文件
+
+aux_source_directory(dir VAR) 发现一个目录下所有的源代码文件并将列表存储在一个变量中。
+
+aux_source_directory(. SRC_LIST) # 搜索当前目录下的所有.cpp文件
+add_library(demo ${SRC_LIST})
+
+５. 设置包含的目录
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+Linux 下还可以通过如下方式设置包含的目录
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}")
+
+６．设置包含的库，链接一个第三方库
+set(LINK_DIR /home/zqw/CLionProjects/cmake_practis/cmake-build-debug)
+LINK_DIRECTORIES(${LINK_DIR})＃添加库目录相当于-L 选项。如果你的库目录就在usr/lib下或者usr/local/lib下或者在你配置好的环境目录下。则不用添加库目录
+add_executable(cmake1 main.cpp min_max.h)
+target_link_libraries(cmake1 libmin_max)＃要放在add_executable后面。相当于-l选项
+或者
+set(LINK_DIR /home/zqw/CLionProjects/cmake_practis/cmake-build-debug)
+LINK_DIRECTORIES(${LINK_DIR})
+LINK_LIBRARIES(libmin_max)
+add_executable(cmake1 main.cpp min_max.h)
+
+遗留问题。为什么
+set(LINK_DIR /home/zqw/CLionProjects/cmake_practis/cmake-build-debug)
+set(LIB "libmin_max")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -L${LINK_DIR}　-l${LIB}")
+这样不行
