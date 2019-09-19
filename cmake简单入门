@@ -49,11 +49,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}")
 set(LINK_DIR /home/zqw/CLionProjects/cmake_practis/cmake-build-debug)
 LINK_DIRECTORIES(${LINK_DIR})＃添加库目录相当于-L 选项。如果你的库目录就在usr/lib下或者usr/local/lib下或者在你配置好的环境目录下。则不用添加库目录
 add_executable(cmake1 main.cpp min_max.h)
-target_link_libraries(cmake1 libmin_max)＃要放在add_executable后面。相当于-l选项
+target_link_libraries(cmake1 libmin_max)＃要放在add_executable后面。相当于-l选项。注意此link只指针于一个可执行文件
 或者
 set(LINK_DIR /home/zqw/CLionProjects/cmake_practis/cmake-build-debug)
 LINK_DIRECTORIES(${LINK_DIR})
-LINK_LIBRARIES(libmin_max)
+LINK_LIBRARIES(libmin_max)＃－－－－－－注意，此link针对于整个工程项目
 add_executable(cmake1 main.cpp min_max.h)
 
 遗留问题。为什么
