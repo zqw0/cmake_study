@@ -1,0 +1,221 @@
+一、两种变量的定义参考
+
+  １．Normal Variables
+  通过set(<variable> <value>... [PARENT_SCOPE])这个命令来设置的变量就是Normal Variables.
+  例如：
+  set(my_val "666"),此时my_val变量的值就是666。
+  
+  ２.Cache Variables
+  通过set(<variable> <value>... CACHE <type> <docstring> [FORCE])这个命令来设置的就是
+  Cache Variables。例如：
+  set(my_cache_val "666" CACHE STRING INTERNAL),此时my_cache_val就是一个cache变量。
+  
+二、两种变量的作用域原理及使用
+
+  １．Normal Variables
+  作用域属于整个CMakeLists.txt文件，当文件包含了:
+  add_subdirectory(),include(),macro(),function()语句时，会出现两种不同的效果
+  
+    (1).包含add_subdirectory().(本质是值拷贝)
+    假设，我们在工程根目录CMakeList.txt文件中使用add_subdirectory(src)包含另一个src目录，在
+    src目录中有另一个CmakeList.txt文件。在中断运行的目录结构如下：
+    ├── CMakeLists.txt
+    └── src
+         └── CMakeLists.txt
+    以根目录CMake文件为父目录，src为子目录，此时子目录CMake文件会拷贝一份父目录文件的Normal变量。
+    需要说明的是，我们在子目录中如果想要修改父目录CMake文件包含的Normal变量。必须通过:
+    set(<variable> <value> PARENT_SCOPE)的方式。下面eg：
+    
+    在父目录/根目录的　CMakeList.txt文件如下：
+    cmake_minimum_required(VERSION 3.10)
+    message("父目录 CMakeLists.txt 文件")
+    set(MY_VAL "666")＃设置变量值MY_VAL=666
+    message("第一次在父目录 MY_VAL=${MY_VAL}")#输出，没有进入子目录的CMakeLists.txt的MY_VAL的值
+    add_subdirectory(src) 
+    message("第二次在父目录，MY_VAL=${MY_VAL}")#输出，进入子目录的后的MY_VAL的值
+    
+    在子目录src/CMakeLists.txt文件内容如下：
+    cmake_minimum_required(VERSION 3.10)
+    message("进入子目录 src/CMakeLists.txt 文件")
+    message("在子目录，MY_VAL=${MY_VAL}")#证明子目录拿到父目录Normal Variables的一份拷贝
+    set(MY_VAL "777")#注意此改变，并不会改变父目录的MY_VAL，只会改变此CMake的MY_VAL,相当于形参，只是一份拷贝。
+    ＃set(MY_VAL "777" PARENT_SCOPE)#修改父目录的MY_VAL的正确方法。准确的说是修改调用add_subdirectory()的CMake变量。
+    message("退出子目录")
+    
+    运行结果：
+    cmake .
+    父目录 CMakeLists.txt 文件
+    第一次在父目录 MY_VAL=666
+    进入子目录 src/CMakeLists.txt 文件
+    在子目录，MY_VAL=666
+    退出子目录
+    第二次在父目录，MY_VAL=${MY_VAL}
+    
+    (2).function()本质是值拷贝
+    调用function()的位置。
+    －－直接在此cmake中。eg：
+    
+    cmake_minimum_required(VERSION 3.10)
+    message("父目录 CMakeLists.txt 文件")
+    set(MY_VAL "666")
+    message("第一次在父目录 MY_VAL=${MY_VAL}")
+    # 函数定义
+    function(xyz test_VAL) # 函数定义处！
+    set(MY_VAL "888" PARENT_SCOPE)#调用此函数的cmake会将所有的Normal Variables全部拷贝一遍到此函数中
+    message("functions is MY_VAL=${MY_VAL}")
+    endfunction(xyz)
+    xyz(${MY_VAL}) # 调用函数
+    message("第二次在父目录，MY_VAL=${MY_VAL}")
+    
+    运行结果：
+    父目录 CMakeLists.txt 文件
+    第一次在父目录 MY_VAL=666
+    进入子目录 src/CMakeLists.txt 文件
+    在子目录，MY_VAL=777
+    退出子目录
+    第二次在父目录，MY_VAL=666
+    
+    －－写在.cmake文件中。用include去包含
+    eg:
+    目录结构
+        ├── CMakeLists.txt
+        └── src
+            └── fun.cmake
+     
+    父目录下的CMakeList.txt
+    cmake_minimum_required(VERSION 3.10)
+    message("父目录的cmakelist.txt文件")
+    set(test1_val "666")
+    set(test2_val "777")
+    message("第一次在父目录　test1_val = ${test1_val}, test2_val = ${test2_val}")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/src/fun.cmake)
+    zqw(${test1_val})
+    message("第二次在父目录　test1_val = ${test1_val}, test2_val = ${test2_val}")
+    
+    src下的fun.cmake
+    cmake_minimum_required(VERSION 3.10)
+    function(zqw val)
+        message("使用zqw函数　val = ${val}, test1_val = ${test1_val}, test2_val = ${test2_val}")#观察能否访问调用此函数的Normal Variables,是否是对调用处所有的Normal Variables进行了一次拷贝
+        set(val "1" PARENT_SCOPE)#尝试能否通过传入的val值改变test1_val
+        set(test2_val "1" PARENT_SCOPE)#尝试能否直接改变调用处的test2_val
+        message("函数退出")
+    endfunction(zqw)
+    
+    运行结果：
+    父目录的cmakelist.txt文件
+    第一次在父目录　test1_val = 666, test2_val = 777
+    使用zqw函数　val = 666, test1_val = 666, test2_val = 777
+    函数退出
+    第二次在父目录　test1_val = 666, test2_val = 1
+    
+    (3).包含include(),macro() (本质有点类似于C/C++的头文件的预处理)
+    现在在上面的根目录中加入一个cmake_modules目录。目录中有一个Findtest.cmake文件。新的目录结构如下：
+    ├── CMakeLists.txt
+    ├── cmake_modules
+    │   └── Findtest.cmake
+    └── src
+        └── CMakeLists.txt
+    
+    在根目录中的CMakeList.txt文件包含的代码如下：
+    cmake_minimum_required(VERSION 3.10)
+    message("父目录 CMakeLists.txt 文件")
+    set(MY_VAL "666")
+    message("第一次在父目录 MY_VAL=${MY_VAL}")
+    ＃使用include()的宏
+    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)
+    include(Findtest.cmake)#从CMAKE_MODULE_PATH包含的路径中搜索Findtest.cmake文件
+    #test(${MY_VAL}) # 调用宏
+    #xyz(${MY_VAL}) # 调用函数
+    #find_package(Findtest REQUIRED)#从 CMAKE_MODULE_PATH包含的路径中搜索Findtest.cmake文件与include()两者效果是一样的！
+    message("第二次在父目录，MY_VAL=${MY_VAL}")
+    message("include test=${test_VAL}") 
+    #message("macro_val=${macro_val}")
+    
+    cmake_modules/Findtest.cmake 文件内容如下:
+    # 该文件定义了一个函数以及一个宏
+    message("进入 Findtest.cmake 文件")
+    set(test_VAL "222") # 验证根目录 CMake 文件能够访问这个变量
+    set(MY_VAL "000") # 测试 include() 效果
+    # 宏定义
+    macro(test MY_VA) # 定义一个宏！调用了此函数的cmakelist.txt相当与把这段代码在程序中进行了宏展开，所以这里直接修改的就是调用此函数的cmakelist中的变量。声明一个变量自然也在。
+        set(macro_val "1") # 宏内部定义变量
+        message("macro is MY_VAL=${MY_VA}")
+        set(MY_VAL "999") # 直接修改的就是调用该宏所处的文件中的 Normal 变量
+    endmacro(test)
+    # 函数定义
+    function(xyz test_VAL)
+        set(MY_VAL "888" PARENT_SCOPE)  # 修改 调用者的 变量
+        message("function is MY_VAL=${MY_VAL}")
+    endfunction(xyz)
+    
+    运行结果：
+    父目录 CMakeLists.txt 文件
+    第一次在父目录 MY_VAL=666
+    进入 Findtest.cmake 文件
+    第二次在父目录，MY_VAL=000
+    include test=222    
+    
+    从结果可以看出，include() 内部是可以修改调用者 MY_VAL 变量。include() 包含的文件内定义的变量 test_VAL，也可以在调用 include() 的 CMakeLists.txt 文件中直接访问，
+    同样的对于 macro() 也适用，在根目录 CMake 文件中调用宏，即取消 test(𝑀𝑌𝑉𝐴𝐿)以及𝑚𝑒𝑠𝑠𝑎𝑔𝑒("𝑚𝑎𝑐𝑟𝑜𝑣𝑎𝑙={macro_val}") 部分的注释，此时最后输出结果
+    运行结果：
+    父目录 CMakeLists.txt 文件
+    第一次在父目录 MY_VAL=666
+    进入 Findtest.cmake 文件
+    macro is MY_VAL=000
+    第二次在父目录，MY_VAL=999
+    include test=222
+    macro_val=1   
+    
+    可以看出，这次输出的结果在第二次进入父目录后，MY_VAL 变量的值就是 999 了。注意到在根目录中 CMakeLists.txt 中 注释语句中有一个 find_package() ，
+    这个和 include() 其实都是一样的结果。
+    
+  ２．Cache Variables  
+  相当于一个全局变量，我们在同一个cmake工程中都可以使用。Cache变量有以下几点说明：
+    (1).Cache变量CMAKE_INSTALL_PREFIX默认值是/usr/local（可以在生成的CMakeCache.txt文件中查看），这时候如果我们在某个CMakeList.txt中，
+    仍然可以使用set(CMAKE_INSTALL_PREFIX "/usr"),那么此时我们install的时候CMake以后面的/usr作为CMAKE_INSTALL_PREFIX的值，这是因为CMake规定，
+    有一个与Cache变量同名的Normal变量出现时，后面使用这个变量的值都是以Normal为准，如果没有同名的Normal变量，CMake才会自动使用Cache变量。
+    
+    (2).所有的Cache变量都会出现在CMakeCache.txt文件中。这个文件是我们键入cmake .命令后自动出现的文件。打开这个文件发现，CMake本身会有一些默认的
+    全局Cache变量。例如：CMAKE_INSTALL_PREFIX, CMAKE_BUILD_TYPE, CMAKE_CXX_FLAGSS等等。可以自行查看。当然我们自己定义的变量Cache变量也会
+    出现在这个文件中。Cache变量定义格式为
+    set(<variable> <value> CACHE STRING INTERNAL)。这里的STRING可以替换为BOOL FILEPATH PATH,但是要根据前面的value类型来确定。
+    修改Cache变量定义的格式为
+    set(<variable> <value> CACHE INSTERNAL FORCE)，另一种方式是直接在终端中使用 cmake -D var = value.. 来设定默认存在的CMake Cache变量。
+    
+    下面通过一个例子来说明以上两点
+    目录结构：
+    ├── CMakeLists.txt
+    └── src
+        └── CMakeLists.txt
+        
+    根目录 CMakeLists.txt 文件内容如下：
+    cmake_minimum_required(VERSION 3.10)
+    set(MY_GLOBAL_VAR "666" CACHE STRING INTERNAL )
+    message("第一次在父目录 CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
+    message("第一次在父目录 MY_GLOBAL_VAR=${MY_GLOBAL_VAR}")
+    add_subdirectory(src)
+    message("第二次在父目录 CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
+    message("第二次在父目录 MY_GLOBAL_VAR=${MY_GLOBAL_VAR}")
+    set(CMAKE_INSTALL_PREFIX "-->usr" )
+    message("第三次在父目录 CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
+    
+    src/CMakeLists.txt 文件内容如下:
+    cmake_minimum_required(VERSION 3.10)
+    message("子目录,CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
+    message("子目录,MY_GLOBAL_VAR=${MY_GLOBAL_VAR}")
+    set(CMAKE_INSTALL_PREFIX "/usr" CACHE STRING INTERNAL FORCE)
+    set(MY_GLOBAL_VAR "777" CACHE STRING INTERNAL FORCE )
+    
+    运行结果
+    第一次在父目录 CMAKE_INSTALL_PREFIX=/usr/local
+    第一次在父目录 MY_GLOBAL_VAR=666
+    子目录,CMAKE_INSTALL_PREFIX=/usr/local
+    子目录,MY_GLOBAL_VAR=666
+    第二次在父目录 CMAKE_INSTALL_PREFIX=/usr
+    第二次在父目录 MY_GLOBAL_VAR=777
+    第三次在父目录 CMAKE_INSTALL_PREFIX=-->usr
+    
+    程序说明：首先在根目录中打印一下当前的 Cache 变量 CMAKE_INSTALL_PREFIX 值，主要看看默认值是什么，然后在子目录 src/CMakeLists.txt 
+    中再次打印和修改该 Cache 值，目的是熟悉修改全局 Cache 变量，当返回根目录 CMakeLists.txt 文件中再次执行第二次打印该 Cache 值时，
+    主要看一看在子目录中修改后的效果。接着在根目录中设定一个 CMAKE_INSTALL_PREFIX 的 Normal 同名变量，此时第三次打印 CMAKE_INSTALL_PREFIX 的值，
+    此时是为了证明，当有与 Cache 同名的 Normal 变量出现时，CMake 会优先使用 Normal 属性的值
