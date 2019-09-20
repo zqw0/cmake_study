@@ -108,6 +108,17 @@
     函数退出
     第二次在父目录　test1_val = 666, test2_val = 1
     
+    如何按引用来传递参数？(在function中修改外部作用域的值)
+    答：通过名字来传递变量
+    例如：有一个var变量，在函数外部定义，要通过调用一个函数f1, 来修改var的值
+    set(var "abc")                      # 定义一个变量var，初值为abc
+    function(f1 arg)
+        set(${arg} "ABC" PARENT_SCOPE)  # ${arg} == var, 于是相当于set(var "ABC" PARENT_SCOPE)
+    endfunction()
+    message("before calling f1, var = ${var}")
+    f1(var)                                     # 如果写成了f1(${var})会怎样？
+    message("after calling f1, var = ${var}")
+    
     (3).包含include(),macro() (本质有点类似于C/C++的头文件的预处理)
     现在在上面的根目录中加入一个cmake_modules目录。目录中有一个Findtest.cmake文件。新的目录结构如下：
     ├── CMakeLists.txt
